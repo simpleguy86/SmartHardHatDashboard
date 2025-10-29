@@ -168,6 +168,7 @@
 </div>
 
 
+
         </div>
       </div>
 
@@ -214,6 +215,7 @@
  ✅ Map + Geofence set/clear
  ✅ ThingSpeak auto refresh
  ✅ Red Geofence Alert when out of range
+ ✅ Local-device timestamps for Check-in / Check-out (first time only per day)
 **********************/
 
 const CHANNEL_ID = 3110127;
@@ -331,8 +333,15 @@ async function fetchLatest(){
     const lat=parseFloat(data.field1),lon=parseFloat(data.field2);
     const worker=data.field3||'—';
     const hardhat=parseHardhat(data.field4);
-    const checkIn=formatTimeField(data.field5);
-    const checkOut=formatTimeField(data.field6);
+    // ===== Use local device time for check-in/check-out signals =====
+    const checkInSignal = data.field5 && String(data.field5).trim() !== '0' && String(data.field5).trim() !== '—';
+    const checkOutSignal = data.field6 && String(data.field6).trim() !== '0' && String(data.field6).trim() !== '—';
+    const localTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    let checkIn = '—';
+    let checkOut = '—';
+    if (checkInSignal) checkIn = localTime;
+    if (checkOutSignal) checkOut = localTime;
+
     const sos=parseSOS(data.field7);
     const created=data.created_at;
 
@@ -341,14 +350,20 @@ async function fetchLatest(){
     sosBadge.textContent=sos.label;
     sosBadge.className='badge '+sos.cls;
     
-    // Send Gmail alert when SOS = Emergency
-if (sos.label === 'Emergency') {
-  sendSOSAlert(worker, lat, lon);
-  
+    // Send Gmail alert when SOS = Emergency (rate-limited to avoid spam)
+    if (sos.label === 'Emergency') {
+      const lastSOS = parseInt(localStorage.getItem('lastSOS') || '0', 10);
+      const now = Date.now();
+      const MIN_GAP = 5 * 60 * 1000; // 5 minutes
+      if (!lastSOS || (now - lastSOS) > MIN_GAP) {
+        sendSOSAlert(worker, lat, lon);
+        localStorage.setItem('lastSOS', String(now));
+      } else {
+        appendLog('SOS triggered but suppressed to avoid duplicate alerts');
+      }
+    }
 
-}
-
-    attEl.textContent=(data.field5&&data.field5!=='0')?'Checked In':'Checked Out';
+    attEl.textContent=(checkInSignal)?'Checked In':(checkOutSignal)?'Checked Out':'—';
     checkInEl.textContent=checkIn;
     checkOutEl.textContent=checkOut;
     updateDTR(worker, checkIn, checkOut);
@@ -376,12 +391,7 @@ if (sos.label === 'Emergency') {
       }
     }
 
-    const logText=`Worker: ${worker}
-Hardhat: ${hardhat}
-SOS: ${sos.label}
-Check-in: ${checkIn}
-Check-out: ${checkOut}
-Lat: ${lat||0}, Lon: ${lon||0}`;
+    const logText=`Worker: ${worker}\nHardhat: ${hardhat}\nSOS: ${sos.label}\nCheck-in: ${checkIn}\nCheck-out: ${checkOut}\nLat: ${lat||0}, Lon: ${lon||0}`;
     appendLog(logText);
     lastEl.textContent='Last: '+new Date().toLocaleTimeString();
   }catch(e){
@@ -411,14 +421,22 @@ function updateDTR(worker, checkIn, checkOut) {
   }
 
   const currentHour = new Date().getHours();
+
+  // Only write times if the incoming check-in/out are actual local times (not '—')
   if (checkIn !== "—" && checkIn !== "0") {
-    if (currentHour < 12) dtrData[key].amIn = checkIn;
-    else dtrData[key].pmIn = checkIn;
+    if (currentHour < 12) {
+      if (!dtrData[key].amIn || dtrData[key].amIn === "-") dtrData[key].amIn = checkIn;
+    } else {
+      if (!dtrData[key].pmIn || dtrData[key].pmIn === "-") dtrData[key].pmIn = checkIn;
+    }
   }
 
   if (checkOut !== "—" && checkOut !== "0") {
-    if (currentHour < 12) dtrData[key].amOut = checkOut;
-    else dtrData[key].pmOut = checkOut;
+    if (currentHour < 12) {
+      if (!dtrData[key].amOut || dtrData[key].amOut === "-") dtrData[key].amOut = checkOut;
+    } else {
+      if (!dtrData[key].pmOut || dtrData[key].pmOut === "-") dtrData[key].pmOut = checkOut;
+    }
   }
 
   // Save updated data
@@ -470,8 +488,6 @@ function downloadDTR() {
 
 
 
-
-
 // ========= REFRESH SYSTEM =========
 document.getElementById('refreshBtn').addEventListener('click',fetchLatest);
 fetchLatest();
@@ -512,25 +528,6 @@ function sendSOSAlert(workerID, latitude, longitude) {
        alert(" SOS alert sent via Gmail!");
     }, function(error) {
        console.error("❌ Email failed:", error);
-       alert(" Failed to send SOS email. Check console.");
-    });
-}
-</script>
-
-<script>
-function sendSOSAlert(workerID, latitude, longitude) {
-  const templateParams = {
-    worker_id: workerID,
-    location_link: `https://www.google.com/maps?q=${latitude},${longitude}`,
-    message: ` SOS EMERGENCY ALERT! Worker ${workerID} activated SOS.\n\nLocation: https://www.google.com/maps?q=${latitude},${longitude}`
-  };
-
-  emailjs.send("service_wqy08m9", "template_392j1tj", templateParams)
-    .then(function(response) {
-       console.log(" SOS Email sent!", response.status, response.text);
-       alert(" SOS alert sent via Gmail!");
-    }, function(error) {
-       console.error(" Email failed:", error);
        alert(" Failed to send SOS email. Check console.");
     });
 }
