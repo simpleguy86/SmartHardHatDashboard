@@ -285,7 +285,11 @@ let geofence={
 const map=L.map('map').setView([geofence.lat,geofence.lon],17);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 let workerMarker=null;
-let siteMarker=L.marker([geofence.lat,geofence.lon]).addTo(map).bindPopup('Site center');
+let siteMarker = L.marker(
+  [geofence.lat, geofence.lon],
+  { icon: redIcon }
+).addTo(map).bindPopup('Site center');
+
 let fenceCircle=L.circle([geofence.lat,geofence.lon],{radius:geofence.radius,color:'#00c2a8',fillOpacity:0.06}).addTo(map);
 
 document.getElementById('gfLat').value=geofence.lat.toFixed(6);
@@ -304,9 +308,17 @@ document.getElementById('setGfBtn').addEventListener('click',()=>{
   localStorage.setItem('gfRadius',rad);
 
   if(!siteMarker){
-    siteMarker=L.marker([lat,lon]).addTo(map).bindPopup('Site center');
+    siteMarker = L.marker(
+  [lat, lon],
+  { icon: redIcon }
+).addTo(map).bindPopup('Site center');
+
   }else{
-    siteMarker.setLatLng([lat,lon]).bindPopup('Site center (updated)');
+    siteMarker
+  .setLatLng([lat, lon])
+  .setIcon(redIcon)
+  .bindPopup('Site center (updated)');
+
   }
 
   if(!fenceCircle){
