@@ -214,7 +214,7 @@ function appendLog(txt){
 }
 if(localStorage.getItem('shh_log')) logEl.textContent=localStorage.getItem('shh_log');
 document.getElementById('clearLogBtn').addEventListener('click',()=>{ logEl.textContent='(Log cleared)\n'; localStorage.removeItem('shh_log'); });
-document.getElementById('downloadLogBtn').addEventListener('click',()=>{
+document.getElementById('downloadLogBtn').addEventListener('click',()=>{ 
   const blob=new Blob([logEl.textContent],{type:'text/plain'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url;
@@ -280,11 +280,95 @@ document.getElementById('clearGfBtn').addEventListener('click', () => {
   geofence = { lat: null, lon: null, radius: 0 };
   distDisplay.textContent = 'N/A';
   distanceEl.textContent = 'N/A';
+  attEl.textContent = 'N/A';
   appendLog('⚪ Geofence cleared');
 });
 
-// ========= REST OF YOUR EXISTING CODE (fetchLatest, DTR, SOS, theme toggle, etc.) =========
-// ... keep all your existing code as-is below this
+// ========= FETCH LATEST FROM THINGSPEAK =========
+async function fetchLatest() {
+  try {
+    const resp = await fetch(LATEST_URL());
+    const data = await resp.json();
+    if (!data) return;
+
+    const latestLat = parseFloat(data.field1) || 0;
+    const latestLon = parseFloat(data.field2) || 0;
+    const workerIDVal = parseInt(data.field3) || 0;
+    const hardhatVal = parseInt(data.field4) || 0;
+    const checkInVal = data.field5 || '';
+    const checkOutVal = data.field6 || '';
+    const sosVal = parseInt(data.field7) || 0;
+
+    // Update feed table
+    fEls[1].textContent = latestLat.toFixed(6);
+    fEls[2].textContent = latestLon.toFixed(6);
+    fEls[3].textContent = workerIDVal;
+    fEls[4].textContent = hardhatVal;
+    fEls[5].textContent = checkInVal;
+    fEls[6].textContent = checkOutVal;
+    fEls[7].textContent = sosVal;
+
+    // ====== LOCATION, HARDHAT, WORKER ID ======
+    workerIdEl.textContent = workerIDVal ? '1' : '0';
+    hardhatEl.textContent = hardhatVal ? 'Worn' : 'Not Worn';
+    checkInEl.textContent = checkInVal || '—';
+    checkOutEl.textContent = checkOutVal || '—';
+    sosBadge.textContent = sosVal ? 'SOS Active' : 'Safe';
+    sosBadge.className = sosVal ? 'badge danger' : 'badge ok';
+
+    // ====== ATTENDANCE AND DISTANCE BASED ON GEOFENCE ======
+    if (latestLat === 0 || latestLon === 0) {
+      locationEl.textContent = 'No GPS Available';
+      distanceEl.textContent = 'N/A';
+      distDisplay.textContent = 'N/A';
+      attEl.textContent = 'N/A';
+      if (workerMarker) { map.removeLayer(workerMarker); workerMarker = null; }
+    } else {
+      locationEl.textContent = `${latestLat.toFixed(6)}, ${latestLon.toFixed(6)}`;
+      let dist = null;
+      if (geofence.lat !== null && geofence.lon !== null) {
+        const R = 6371000; // meters
+        const dLat = (latestLat - geofence.lat) * Math.PI / 180;
+        const dLon = (latestLon - geofence.lon) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(geofence.lat * Math.PI/180) * Math.cos(latestLat * Math.PI/180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        dist = R * c;
+        distanceEl.textContent = dist.toFixed(1) + ' m';
+        distDisplay.textContent = dist.toFixed(1) + ' m';
+        attEl.textContent = dist <= geofence.radius ? 'Present' : 'Absent';
+      } else {
+        distanceEl.textContent = 'N/A';
+        distDisplay.textContent = 'N/A';
+        attEl.textContent = 'N/A';
+      }
+
+      // Update worker marker
+      if (!workerMarker) {
+        workerMarker = L.marker([latestLat, latestLon]).addTo(map).bindPopup('Worker');
+      } else {
+        workerMarker.setLatLng([latestLat, latestLon]);
+      }
+    }
+
+    lastEl.textContent = new Date(data.created_at).toLocaleTimeString();
+    appendLog(`Fetched: WorkerID=${workerIDVal}, Hardhat=${hardhatVal}, SOS=${sosVal}, Lat=${latestLat.toFixed(6)}, Lon=${latestLon.toFixed(6)}`);
+
+  } catch(err) {
+    console.error('Fetch error', err);
+    appendLog(' Fetch error: ' + err);
+  }
+}
+
+fetchLatest();
+setInterval(fetchLatest, REFRESH_MS);
+
+// ========= THEME TOGGLE =========
+document.getElementById('themeToggle').addEventListener('click', ()=>{ document.body.classList.toggle('light'); });
+document.getElementById('refreshBtn').addEventListener('click', fetchLatest);
+document.getElementById('centerBtn').addEventListener('click', ()=>{ if (workerMarker) map.panTo(workerMarker.getLatLng()); });
+
 </script>
 </body>
 </html>
