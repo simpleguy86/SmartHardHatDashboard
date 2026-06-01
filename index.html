@@ -297,7 +297,9 @@ async function fetchLatest() {
     const hardhatVal = parseInt(data.field4) || 0;
     const checkInVal = data.field5 || '';
     const checkOutVal = data.field6 || '';
-    const sosVal = parseInt(data.field7) || 0;
+    
+    const sosVal = Number(data.field7);
+    const isSOS = sosVal === 1;
 
     // Update feed table
     fEls[1].textContent = latestLat.toFixed(6);
@@ -313,8 +315,8 @@ async function fetchLatest() {
     hardhatEl.textContent = hardhatVal ? 'Worn' : 'Not Worn';
     checkInEl.textContent = checkInVal || '—';
     checkOutEl.textContent = checkOutVal || '—';
-    sosBadge.textContent = sosVal ? 'SOS Active' : 'Safe';
-    sosBadge.className = sosVal ? 'badge danger' : 'badge ok';
+    sosBadge.textContent = isSOS ? 'SOS Active' : 'Safe';
+    sosBadge.className = isSOS ? 'badge danger' : 'badge ok';
 
     // ====== ATTENDANCE AND DISTANCE BASED ON GEOFENCE ======
     if (latestLat === 0 || latestLon === 0) {
