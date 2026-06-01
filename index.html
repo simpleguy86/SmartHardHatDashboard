@@ -292,14 +292,14 @@ async function fetchLatest() {
     if (!data) return;
 
     const latestLat = parseFloat(data.field1) || 0;
-    const latestLon = parseFloat(data.field2) || 0;
-    const workerIDVal = parseInt(data.field3) || 0;
-    const hardhatVal = parseInt(data.field4) || 0;
-    const checkInVal = data.field5 || '';
-    const checkOutVal = data.field6 || '';
-    
-    const sosVal = Number(data.field7);
-    const isSOS = sosVal === 1;
+const latestLon = parseFloat(data.field2) || 0;
+const workerIDVal = parseInt(data.field3, 10) || 0;
+const hardhatVal = parseInt(data.field4, 10) || 0;
+const checkInVal = data.field5 || '';
+const checkOutVal = data.field6 || '';
+
+// SOS is ONLY active when field7 is exactly "1"
+const isSOS = String(data.field7 || '').trim() === '1';
 
     // Update feed table
     fEls[1].textContent = latestLat.toFixed(6);
@@ -315,8 +315,14 @@ async function fetchLatest() {
     hardhatEl.textContent = hardhatVal ? 'Worn' : 'Not Worn';
     checkInEl.textContent = checkInVal || '—';
     checkOutEl.textContent = checkOutVal || '—';
-    sosBadge.textContent = isSOS ? 'SOS Active' : 'Safe';
-    sosBadge.className = isSOS ? 'badge danger' : 'badge ok';
+    
+    if (isSOS) {
+  sosBadge.textContent = 'SOS Active';
+  sosBadge.className = 'badge danger';
+} else {
+  sosBadge.textContent = 'Safe';
+  sosBadge.className = 'badge ok';
+}
 
     // ====== ATTENDANCE AND DISTANCE BASED ON GEOFENCE ======
     if (latestLat === 0 || latestLon === 0) {
@@ -355,7 +361,7 @@ async function fetchLatest() {
     }
 
     lastEl.textContent = new Date(data.created_at).toLocaleTimeString();
-    appendLog(`Fetched: WorkerID=${workerIDVal}, Hardhat=${hardhatVal}, SOS=${sosVal}, Lat=${latestLat.toFixed(6)}, Lon=${latestLon.toFixed(6)}`);
+    appendLog(`Fetched: WorkerID=${workerIDVal}, Hardhat=${hardhatVal}, SOS=${isSOS ? 1 : 0}, Lat=${latestLat.toFixed(6)}, Lon=${latestLon.toFixed(6)}`);
 
   } catch(err) {
     console.error('Fetch error', err);
